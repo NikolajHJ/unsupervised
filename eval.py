@@ -97,7 +97,7 @@ def eval_cluster(model, X_tr, y_tr, X_te, y_te, cols):
 
 def eval_nn(X_tr, y_tr, X_te, y_te):
     nn = TorchMLPWrapper(device=DEVICE,
-                         epochs=500,
+                         epochs=100,
                          early_stopping=True,
                          verbose=0,
                          random_state=0)

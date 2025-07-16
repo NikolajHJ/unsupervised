@@ -38,7 +38,7 @@ OG_TRAIN  = Path("heart_attack_prediction_indonesia_scaled_train.csv")
 PCA_TRAIN = Path("heart_attack_prediction_indonesia_pca_train.csv")
 ICA_TRAIN = Path("heart_attack_prediction_indonesia_ica_train.csv")
 
-SAMPLE_N  = 100        # rows used for feature selection (None = all)
+SAMPLE_N  = None      # rows used for feature selection (None = all)
 OUT_ROOT  = Path("selected_datasets")
 DEVICE    = "cuda"      # or "cpu"
 # ---------------------------------------------------------------------
@@ -106,41 +106,45 @@ def main():
         "gmm":    GaussianMixture(n_components=2,
                                   covariance_type="full",
                                   random_state=0),
-        "mlp":    TorchMLPWrapper(device=DEVICE,
-                                  epochs=200,
-                                  early_stopping=True,
-                                  verbose=0,
-                                  random_state=0),
+        # "mlp":    TorchMLPWrapper(device=DEVICE,
+        #                           epochs=25,
+        #                           early_stopping=True,
+        #                           verbose=0,
+        #                           random_state=0),
     }
 
     rows = []
+    # total iterations = (#datasets) × (#models)
+    total_steps = len(datasets) * len(models)
 
-    for ds_name, csv in datasets.items():
-        X, col_names, y_true = load_matrix(csv)
+    with tqdm(total=total_steps, desc="Backward FS", unit="comb") as pbar:
+        for ds_name, csv in datasets.items():
+            X, col_names, y_true = load_matrix(csv)
 
-        for mdl_name, est in models.items():
-            print(f"{mdl_name.upper():5} on {ds_name:3} "
-                  f"(rows={X.shape[0]}, feats={X.shape[1]})")
+            for mdl_name, est in models.items():
+                print(f"{mdl_name.upper():5} on {ds_name:3} "
+                    f"(rows={X.shape[0]}, feats={X.shape[1]})")
 
-            mask, curve = backward_selection(est, X, y_true)
+                mask, curve = backward_selection(est, X, y_true)
 
-            # save mask
-            mdl_dir = OUT_ROOT / mdl_name
-            mdl_dir.mkdir(exist_ok=True)
-            with open(mdl_dir / f"{ds_name}_mask.json", "w") as fp:
-                json.dump(col_names[mask].tolist(), fp, indent=2)
+                # save mask
+                mdl_dir = OUT_ROOT / mdl_name
+                mdl_dir.mkdir(exist_ok=True)
+                with open(mdl_dir / f"{ds_name}_mask.json", "w") as fp:
+                    json.dump(col_names[mask].tolist(), fp, indent=2)
 
-            metric_name = "ari" if mdl_name in {"kmeans", "gmm"} else "accuracy"
-            rows.extend(
-                {"model": mdl_name,
-                 "dataset": ds_name,
-                 "n_features": X.shape[1] - i,
-                 metric_name: s}
-                for i, s in enumerate(curve, start=1)
-            )
+                metric_name = "ari" if mdl_name in {"kmeans", "gmm"} else "accuracy"
+                rows.extend(
+                    {"model": mdl_name,
+                    "dataset": ds_name,
+                    "n_features": X.shape[1] - i,
+                    metric_name: s}
+                    for i, s in enumerate(curve, start=1)
+                )
 
-            print(f"  kept {mask.sum():2d} features | "
-                  f"best {metric_name} = {max(curve):.3f}")
+                print(f"  kept {mask.sum():2d} features | "
+                    f"best {metric_name} = {max(curve):.3f}")
+                pbar.update(1)
 
     if rows:
         pd.DataFrame(rows).to_csv(

@@ -51,10 +51,13 @@ for col, mp in VALUE_MAP.items():
         df[col] = df[col].map(mp)
 
 df = df.dropna().reset_index(drop=True)
+
+mapped_path = dst_csv.with_name(f"heart_attack_prediction_indonesia.csv")
+df.to_csv(mapped_path, index=False)
+print("Saved value‑mapped OG CSV →", mapped_path)        # <── NEW
+
 print("Rows after drop-na:", len(df))
-dist = df["alcohol_consumption"].value_counts(dropna=False).rename_axis("alcohol_consumption").reset_index(name="count")
-print(dist)
-quit()
+
 # ------------------------------------------------------------------
 # 3. split 80 / 20 stratified by heart_attack
 LABEL = "heart_attack"
@@ -102,24 +105,24 @@ print("Saved PCA train / test CSVs")
 
 # ------------------------------------------------------------------
 # 6. ICA (same n_components) on TRAIN → transform both
-n_comp = pca_train_mat.shape[1]
-ica = FastICA(n_components=n_comp, random_state=0, max_iter=10000)
-ica_train_mat = ica.fit_transform(train_df[num_cols])
-ica_test_mat  = ica.transform(test_df[num_cols])
-ica_cols = [f"IC{i+1}" for i in range(n_comp)]
+# n_comp = pca_train_mat.shape[1]
+# ica = FastICA(n_components=n_comp, random_state=0, max_iter=1000)
+# ica_train_mat = ica.fit_transform(train_df[num_cols])
+# ica_test_mat  = ica.transform(test_df[num_cols])
+# ica_cols = [f"IC{i+1}" for i in range(n_comp)]
 
-ica_train_df = pd.DataFrame(ica_train_mat, columns=ica_cols)
-ica_test_df  = pd.DataFrame(ica_test_mat,  columns=ica_cols)
-ica_train_df[LABEL] = train_df[LABEL].values
-ica_test_df[LABEL]  = test_df[LABEL].values
+# ica_train_df = pd.DataFrame(ica_train_mat, columns=ica_cols)
+# ica_test_df  = pd.DataFrame(ica_test_mat,  columns=ica_cols)
+# ica_train_df[LABEL] = train_df[LABEL].values
+# ica_test_df[LABEL]  = test_df[LABEL].values
 
-ica_train = dst_csv.with_name(f"{stem}_ica_train.csv")
-ica_test  = dst_csv.with_name(f"{stem}_ica_test.csv")
-ica_train_df.to_csv(ica_train, index=False)
-ica_test_df.to_csv(ica_test,  index=False)
-joblib.dump(ica, dst_csv.with_name(f"{stem}_ica.joblib"))
-print("Saved ICA train / test CSVs")
+# ica_train = dst_csv.with_name(f"{stem}_ica_train.csv")
+# ica_test  = dst_csv.with_name(f"{stem}_ica_test.csv")
+# ica_train_df.to_csv(ica_train, index=False)
+# ica_test_df.to_csv(ica_test,  index=False)
+# joblib.dump(ica, dst_csv.with_name(f"{stem}_ica.joblib"))
+# print("Saved ICA train / test CSVs")
 
-print("\nArtifacts written:")
-for p in [scaled_train, scaled_test, pca_train, pca_test, ica_train, ica_test]:
-    print(" ", p)
+# print("\nArtifacts written:")
+# for p in [scaled_train, scaled_test, pca_train, pca_test, ica_train, ica_test]:
+#     print(" ", p)
