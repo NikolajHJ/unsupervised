@@ -34,9 +34,11 @@ from sklearn.base import clone
 from mlp import TorchMLPWrapper      # ← your supervised NN wrapper
 
 # ------------- configuration -----------------------------------------
-OG_TRAIN  = Path("heart_attack_prediction_indonesia_scaled_train.csv")
-PCA_TRAIN = Path("heart_attack_prediction_indonesia_pca_train.csv")
-ICA_TRAIN = Path("heart_attack_prediction_indonesia_ica_train.csv")
+OG_TRAIN  = Path("datasets/scaled/ha_scaled_train.csv")
+PCA_TRAIN = Path("datasets/pca/ha_pca_train.csv")
+ICA_TRAIN = Path("datasets/ica/ha_ica_train.csv")
+RP_TRAIN = Path("datasets/rp/ha_rp_train.csv")
+
 
 SAMPLE_N  = None      # rows used for feature selection (None = all)
 OUT_ROOT  = Path("selected_datasets")
@@ -44,16 +46,18 @@ DEVICE    = "cuda"      # or "cpu"
 # ---------------------------------------------------------------------
 
 
-def load_matrix(csv: Path):
+def load_matrix(csv: Path, sample_n: int | None = None):
     """Return X (n×p), col_names, y_true."""
     df = pd.read_csv(csv)
     y_true = df["heart_attack"].values
     X_df = df.drop(columns=["heart_attack"])
-    if SAMPLE_N and SAMPLE_N < len(X_df):
-        X_df = X_df.sample(n=SAMPLE_N, random_state=42)
-        y_true = y_true[X_df.index]
-    return X_df.values, X_df.columns, y_true
 
+    # down-sample *only* when sample_n is given
+    if sample_n is not None and sample_n < len(X_df):
+        X_df   = X_df.sample(n=sample_n, random_state=42)
+        y_true = y_true[X_df.index]
+
+    return X_df.values, X_df.columns, y_true
 
 def metric(estimator, X, y, cols):
     """
@@ -96,9 +100,10 @@ def main():
     OUT_ROOT.mkdir(exist_ok=True)
 
     datasets = {
-        "OG":  OG_TRAIN,
+        "OG" : OG_TRAIN,
         "PCA": PCA_TRAIN,
         "ICA": ICA_TRAIN,
+        "RP" : RP_TRAIN,
     }
 
     models = {
@@ -106,22 +111,26 @@ def main():
         "gmm":    GaussianMixture(n_components=2,
                                   covariance_type="full",
                                   random_state=0),
-        # "mlp":    TorchMLPWrapper(device=DEVICE,
-        #                           epochs=25,
-        #                           early_stopping=True,
-        #                           verbose=0,
-        #                           random_state=0),
+        "mlp":    TorchMLPWrapper(device=DEVICE,
+                                  epochs=15,
+                                  early_stopping=True,
+                                  verbose=0,
+                                  random_state=0),
     }
 
     rows = []
     # total iterations = (#datasets) × (#models)
     total_steps = len(datasets) * len(models)
+    SAMPLE_N_MLP = 10_000   # cap for the NN only
 
     with tqdm(total=total_steps, desc="Backward FS", unit="comb") as pbar:
         for ds_name, csv in datasets.items():
-            X, col_names, y_true = load_matrix(csv)
+
 
             for mdl_name, est in models.items():
+                # choose whether to down-sample
+                sample_n = SAMPLE_N_MLP if mdl_name == "mlp" else None
+                X, col_names, y_true = load_matrix(csv, sample_n=sample_n)
                 print(f"{mdl_name.upper():5} on {ds_name:3} "
                     f"(rows={X.shape[0]}, feats={X.shape[1]})")
 

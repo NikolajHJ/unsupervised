@@ -2,127 +2,124 @@
 """
 prepare_unsupervised_datasets.py
 --------------------------------
-Creates three numeric data sets (scaled, PCA, ICA) and
-splits each of them into an 80/20 stratified train / test pair.
+• value‑map categoricals → floats
+• save OG csv
+• create scaled, PCA‑, ICA‑ and RP‑based train / test splits
+  (same   n_components for PCA, ICA, RP)
+Files are written under   datasets/<subfolder>/…
 """
 
-from pathlib import Path
+from pathlib import Path, PurePath
 from shutil import copy2
-import kagglehub
-import joblib
-import pandas as pd
+import kagglehub, joblib, numpy as np, pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA, FastICA
-import numpy as np
-# ------------------------------------------------------------------
-# 1. download raw CSV
+from sklearn.random_projection import GaussianRandomProjection
+
+# ------------ folder helpers -----------------------------------------
+SAMPLE_N = 10_000          # e.g. 10 000   |  None = use the whole file
+
+BASE = Path("datasets")
+DIRS = {name: BASE / name for name in
+        ("og", "scaled", "pca", "ica", "rp")}
+for d in DIRS.values():
+    d.mkdir(parents=True, exist_ok=True)
+# ---------------------------------------------------------------------
+
+# 1) download ----------------------------------------------------------
 print("Downloading dataset …")
 DATASET_REF = "ankushpanday2/heart-attack-prediction-in-indonesia"
 dataset_dir = Path(kagglehub.dataset_download(DATASET_REF))
+src_csv     = next(dataset_dir.glob("*.csv"))
+copy2(src_csv, DIRS["og"] / src_csv.name)
 
-csv_files = list(dataset_dir.glob("*.csv"))
-if not csv_files:
-    raise FileNotFoundError("No CSV found in the Kaggle folder")
-src_csv = csv_files[0]
-dst_csv = Path.cwd() / src_csv.name
-copy2(src_csv, dst_csv)
-print("Copied raw file →", dst_csv.name)
-
-# ------------------------------------------------------------------
-# 2. value-map categoricals → numeric df
-df = pd.read_csv(dst_csv, keep_default_na=False)       # "None" stays a string
-df.replace({'': np.nan}, inplace=True)                 # still mark empty cells as NA
-
+# 2) value‑map ---------------------------------------------------------
+df = pd.read_csv(src_csv, keep_default_na=False)
+df.replace({'': np.nan}, inplace=True)           # treat empty as NA
+if SAMPLE_N is not None and SAMPLE_N < len(df):
+    from sklearn.model_selection import StratifiedShuffleSplit
+    splitter = StratifiedShuffleSplit(
+        n_splits=1, train_size=SAMPLE_N, random_state=42
+    )
+    idx, _ = next(splitter.split(df, df["heart_attack"]))
+    df = df.iloc[idx].reset_index(drop=True)
+    print(f"↓  subsampled to {SAMPLE_N:,} rows (stratified)")
 VALUE_MAP = {
-    "gender": {"Male": 1.0, "Female": 0.0},
-    "region": {"Rural": 0.0, "Urban": 1.0},
-    "income_level": {"Low": 0.0, "Middle": 0.5, "High": 1.0},
-    "smoking_status": {"Never": 0.0, "Past": 0.5, "Current": 1.0},
-    "alcohol_consumption": {"None": 0.0, "Moderate": 0.5, "High": 1.0},
-    "physical_activity": {"Low": 0.0, "Moderate": 0.5, "High": 1.0},
-    "dietary_habits": {"Unhealthy": 0.0, "Healthy": 1.0},
-    "air_pollution_exposure": {"Low": 0.0, "Moderate": 0.5, "High": 1.0},
-    "stress_level": {"Low": 0.0, "Moderate": 0.5, "High": 1.0},
-    "EKG_results": {"Normal": 0.0, "Abnormal": 1.0},
+    "gender":                {"Male": 1., "Female": 0.},
+    "region":                {"Rural": 0., "Urban": 1.},
+    "income_level":          {"Low": 0., "Middle": .5, "High": 1.},
+    "smoking_status":        {"Never": 0., "Past": .5, "Current": 1.},
+    "alcohol_consumption":   {"None": 0., "Moderate": .5, "High": 1.},
+    "physical_activity":     {"Low": 0., "Moderate": .5, "High": 1.},
+    "dietary_habits":        {"Unhealthy": 0., "Healthy": 1.},
+    "air_pollution_exposure":{"Low": 0., "Moderate": .5, "High": 1.},
+    "stress_level":          {"Low": 0., "Moderate": .5, "High": 1.},
+    "EKG_results":           {"Normal": 0., "Abnormal": 1.},
 }
 for col, mp in VALUE_MAP.items():
     if col in df.columns:
         df[col] = df[col].map(mp)
 
 df = df.dropna().reset_index(drop=True)
+og_csv = DIRS["og"] / "heart_attack_prediction_indonesia.csv"
+df.to_csv(og_csv, index=False)
+print("Saved OG value‑mapped →", PurePath(og_csv))
 
-mapped_path = dst_csv.with_name(f"heart_attack_prediction_indonesia.csv")
-df.to_csv(mapped_path, index=False)
-print("Saved value‑mapped OG CSV →", mapped_path)        # <── NEW
-
-print("Rows after drop-na:", len(df))
-
-# ------------------------------------------------------------------
-# 3. split 80 / 20 stratified by heart_attack
+# 3) split -------------------------------------------------------------
 LABEL = "heart_attack"
 train_df, test_df = train_test_split(
-    df, test_size=0.2, random_state=42, stratify=df[LABEL]
-)
-print(f"Train rows: {len(train_df)}   Test rows: {len(test_df)}")
+    df, test_size=0.2, random_state=42, stratify=df[LABEL])
 
-# ------------------------------------------------------------------
-# 4. StandardScaler (fit on train numerics, apply to both)
-num_cols = train_df.select_dtypes(include=[
-    "float64", "float32", "int64", "int32"]).columns.drop(LABEL)
+# numeric cols
+num_cols = train_df.select_dtypes(
+    include=["float64", "float32", "int64", "int32"]
+).columns.drop(LABEL)
 
+# 4) scaling -----------------------------------------------------------
 scaler = StandardScaler()
 train_df[num_cols] = scaler.fit_transform(train_df[num_cols])
 test_df[num_cols]  = scaler.transform(test_df[num_cols])
 
-# save scaled CSVs
-stem = dst_csv.stem
-scaled_train = dst_csv.with_name(f"{stem}_scaled_train.csv")
-scaled_test  = dst_csv.with_name(f"{stem}_scaled_test.csv")
-train_df.to_csv(scaled_train, index=False)
-test_df.to_csv(scaled_test,  index=False)
-joblib.dump(scaler, dst_csv.with_name(f"{stem}_scaler.joblib"))
-print("Saved scaled train / test CSVs and scaler.")
+stem = "ha"   # short stem keeps file names short
+(train_df
+ ).to_csv(DIRS["scaled"] / f"{stem}_scaled_train.csv", index=False)
+(test_df
+ ).to_csv(DIRS["scaled"] / f"{stem}_scaled_test.csv",  index=False)
+joblib.dump(scaler, DIRS["scaled"] / "scaler.joblib")
+print("scaled/   train, test, scaler.joblib written")
 
-# ------------------------------------------------------------------
-# 5. PCA (95 % variance) on TRAIN → transform both
+# ---------- helper to dump component‑based sets ----------------------
+def dump_component_set(mat_tr, mat_te, cols, folder: Path, tag: str, obj):
+    tr = pd.DataFrame(mat_tr, columns=cols); tr[LABEL] = train_df[LABEL].values
+    te = pd.DataFrame(mat_te, columns=cols); te[LABEL] = test_df[LABEL].values
+    tr.to_csv(folder / f"{stem}_{tag}_train.csv", index=False)
+    te.to_csv(folder / f"{stem}_{tag}_test.csv",  index=False)
+    joblib.dump(obj, folder / f"{tag}.joblib")
+
+# 5) PCA ---------------------------------------------------------------
 pca = PCA(n_components=0.95, random_state=0)
-pca_train_mat = pca.fit_transform(train_df[num_cols])
-pca_test_mat  = pca.transform(test_df[num_cols])
-pca_cols = [f"PC{i+1}" for i in range(pca_train_mat.shape[1])]
+pca_tr = pca.fit_transform(train_df[num_cols])
+pca_te = pca.transform(test_df[num_cols])
+p_cols = [f"PC{i+1}" for i in range(pca_tr.shape[1])]
+dump_component_set(pca_tr, pca_te, p_cols, DIRS["pca"], "pca", pca)
+print("pca/      train, test, pca.joblib written")
 
-pca_train_df = pd.DataFrame(pca_train_mat, columns=pca_cols)
-pca_test_df  = pd.DataFrame(pca_test_mat,  columns=pca_cols)
-pca_train_df[LABEL] = train_df[LABEL].values
-pca_test_df[LABEL]  = test_df[LABEL].values
+# 6) ICA ---------------------------------------------------------------
+n_comp = pca_tr.shape[1]
+ica = FastICA(n_components=n_comp, random_state=0, max_iter=10000)
+ica_tr = ica.fit_transform(train_df[num_cols])
+ica_te = ica.transform(test_df[num_cols])
+i_cols = [f"IC{i+1}" for i in range(n_comp)]
+dump_component_set(ica_tr, ica_te, i_cols, DIRS["ica"], "ica", ica)
+print("ica/      train, test, ica.joblib written")
 
-pca_train = dst_csv.with_name(f"{stem}_pca_train.csv")
-pca_test  = dst_csv.with_name(f"{stem}_pca_test.csv")
-pca_train_df.to_csv(pca_train, index=False)
-pca_test_df.to_csv(pca_test,  index=False)
-joblib.dump(pca, dst_csv.with_name(f"{stem}_pca.joblib"))
-print("Saved PCA train / test CSVs")
+# 7) Gaussian Random Projection ---------------------------------------
+rp = GaussianRandomProjection(n_components=n_comp, random_state=0)
+rp_tr = rp.fit_transform(train_df[num_cols])
+rp_te = rp.transform(test_df[num_cols])
+r_cols = [f"RP{i+1}" for i in range(n_comp)]
+dump_component_set(rp_tr, rp_te, r_cols, DIRS["rp"], "rp", rp)
+print("rp/       train, test, rp.joblib written")
 
-# ------------------------------------------------------------------
-# 6. ICA (same n_components) on TRAIN → transform both
-# n_comp = pca_train_mat.shape[1]
-# ica = FastICA(n_components=n_comp, random_state=0, max_iter=1000)
-# ica_train_mat = ica.fit_transform(train_df[num_cols])
-# ica_test_mat  = ica.transform(test_df[num_cols])
-# ica_cols = [f"IC{i+1}" for i in range(n_comp)]
-
-# ica_train_df = pd.DataFrame(ica_train_mat, columns=ica_cols)
-# ica_test_df  = pd.DataFrame(ica_test_mat,  columns=ica_cols)
-# ica_train_df[LABEL] = train_df[LABEL].values
-# ica_test_df[LABEL]  = test_df[LABEL].values
-
-# ica_train = dst_csv.with_name(f"{stem}_ica_train.csv")
-# ica_test  = dst_csv.with_name(f"{stem}_ica_test.csv")
-# ica_train_df.to_csv(ica_train, index=False)
-# ica_test_df.to_csv(ica_test,  index=False)
-# joblib.dump(ica, dst_csv.with_name(f"{stem}_ica.joblib"))
-# print("Saved ICA train / test CSVs")
-
-# print("\nArtifacts written:")
-# for p in [scaled_train, scaled_test, pca_train, pca_test, ica_train, ica_test]:
-#     print(" ", p)
+print("\n✓ All artefacts saved under 'datasets/'")

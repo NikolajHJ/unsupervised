@@ -1,14 +1,3 @@
 [
-  "gender",
-  "region",
-  "hypertension",
-  "diabetes",
-  "cholesterol_level",
-  "alcohol_consumption",
-  "dietary_habits",
-  "sleep_hours",
-  "cholesterol_ldl",
-  "previous_heart_disease",
-  "medication_usage",
-  "participated_in_free_screening"
+  "previous_heart_disease"
 ]

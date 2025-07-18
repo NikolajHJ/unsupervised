@@ -1,20 +1,3 @@
 [
-  "region",
-  "income_level",
-  "hypertension",
-  "cholesterol_level",
-  "family_history",
-  "smoking_status",
-  "alcohol_consumption",
-  "physical_activity",
-  "dietary_habits",
-  "stress_level",
-  "sleep_hours",
-  "blood_pressure_systolic",
-  "blood_pressure_diastolic",
-  "fasting_blood_sugar",
-  "triglycerides",
-  "previous_heart_disease",
-  "medication_usage",
-  "participated_in_free_screening"
+  "previous_heart_disease"
 ]
