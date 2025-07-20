@@ -2,7 +2,12 @@
 
 ## Overview
 
-This project implements a comprehensive unsupervised learning pipeline for analyzing heart attack prediction data from Indonesia. The project explores various dimensionality reduction techniques (PCA, ICA, Random Projection) and clustering algorithms (K-Means, Gaussian Mixture Models) to understand patterns in cardiovascular health data.
+This project implements the required unsupervised learning algorithms for BG4104 Group Report. The project analyzes heart attack prediction data from Indonesia using:
+- **Clustering Algorithms**: K-Means and Gaussian Mixture Models (EM)
+- **Dimensionality Reduction**: PCA, ICA, and Random Projection
+- **Neural Network**: MLP from Assignment #1 with cluster features
+
+This implementation covers all 5 experiments required by the assignment.
 
 ## Project Structure
 
@@ -49,32 +54,39 @@ unsupervised/
 - **Training**: Adam optimizer with early stopping
 - **Integration**: scikit-learn compatible wrapper for seamless pipeline integration
 
-## Installation
+## Installation & Setup
 
 ### Prerequisites
 - Python 3.8+
+- Standard Linux environment (as required by assignment)
 - CUDA-compatible GPU (optional, for faster neural network training)
 
 ### Dependencies
 ```bash
-pip install numpy pandas scikit-learn torch matplotlib seaborn tqdm kagglehub joblib
+pip install -r requirements.txt
 ```
+
+### Data Access
+The project automatically downloads the Heart Attack Prediction Indonesia dataset from Kaggle using kagglehub.
 
 ## Usage
 
-### Quick Start
-Run the complete pipeline:
+### Quick Start (Complete Pipeline)
+Run the complete pipeline to reproduce all results:
 ```bash
 python main.py
 ```
 
-This executes the following steps in sequence:
+This executes all required experiments in sequence:
 1. **Data Download & Preprocessing** (`download_data.py`)
-2. **Feature Selection** (`feature_selector.py`)
+2. **Feature Selection** (`feature_selector.py`) 
 3. **Silhouette Analysis** (`sil_scores.py`)
 4. **Cluster Feature Augmentation** (`clusters_as_input.py`)
 5. **Model Evaluation** (`eval.py`)
 6. **Visualization Generation** (`plotting.py`)
+
+### Individual Experiments
+You can also run experiments individually as described below.
 
 ### Individual Components
 
@@ -152,37 +164,28 @@ The pipeline generates several output files:
 - `plots/ari_vs_features.png`: Feature selection curves
 - `plots/covariance_matrices.png`: Data correlation analysis
 
-## Key Findings
+## Reproducibility Notes
 
-The project demonstrates:
-- Effectiveness of different dimensionality reduction techniques for clustering
-- Impact of feature selection on clustering performance
-- Benefits of combining clustering with supervised learning
-- Trade-offs between model complexity and performance
+- **Random State**: All algorithms use random_state=0 for reproducibility
+- **Data Splits**: Train/test split uses random_state=42 for consistency
+- **Results**: All outputs are saved to `results/` and `plots/` directories
+- **Dependencies**: Exact versions specified in requirements.txt
 
-## Configuration
+## Assignment Compliance
 
-Key configuration parameters can be modified in individual scripts:
+This implementation covers all required experiments:
+1. ✅ Clustering algorithms on original dataset
+2. ✅ Dimensionality reduction algorithms
+3. ✅ Clustering on dimensionality-reduced data (6 combinations)
+4. ✅ Neural network with dimensionality reduction
+5. ✅ Neural network with cluster features as input
 
-- **Sample Size**: Control dataset size for faster experimentation
-- **Device**: CPU/GPU selection for neural network training
-- **Random State**: Ensure reproducibility across runs
-- **Model Parameters**: Adjust clustering and neural network hyperparameters
+## Troubleshooting
 
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
+- If kagglehub fails, ensure you have proper Kaggle API credentials
+- For GPU issues, modify DEVICE="cpu" in relevant scripts
+- All scripts include error handling and will stop pipeline if they fail
 
 ## License
 
-This project is for educational and research purposes. Please ensure compliance with the original dataset's license terms.
-
-## Acknowledgments
-
-- Dataset: Heart Attack Prediction Indonesia from Kaggle
-- Libraries: scikit-learn, PyTorch, pandas, matplotlib, seaborn
-- Academic guidance for unsupervised learning methodology 
+This project is for educational and research purposes. Please ensure compliance with the original dataset's license terms. 
